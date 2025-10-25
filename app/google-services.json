@@ -1,0 +1,48 @@
+{
+  "project_info": {
+    "project_number": "162809246635",
+    "project_id": "pys-e-wallet",
+    "storage_bucket": "pys-e-wallet.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:162809246635:android:5d23ec48cc48be651a98ee",
+        "android_client_info": {
+          "package_name": "com.droidnest.tech.pysadmin"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyB9GyCuJ8OQlqA5GjtuiB-5XG_MaJp4Yxg"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:162809246635:android:3103c65af9a768e61a98ee",
+        "android_client_info": {
+          "package_name": "com.droidnest.tech.pyse_wallet"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyB9GyCuJ8OQlqA5GjtuiB-5XG_MaJp4Yxg"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
