@@ -136,16 +136,17 @@ class TransactionRepositoryImpl @Inject constructor(
 
             val ratesMap = rateDoc.get("rates") as? Map<*, *>
             val myrRate = ratesMap?.get("MYR") as? Double
-                ?: Constants.DEFAULT_EXCHANGE_RATE  // ✅ Using constant
+                ?: Constants.DEFAULT_EXCHANGE_RATE
 
             Log.d(TAG, "✅ Exchange rate: $myrRate")
             myrRate
 
         } catch (e: Exception) {
             Log.e(TAG, "❌ Error: ${e.message}")
-            Constants.DEFAULT_EXCHANGE_RATE  // ✅ Fallback to default
+            Constants.DEFAULT_EXCHANGE_RATE
         }
     }
+
     // ════════════════════════════════════════════════════════════
     // HELPER: CALCULATE TOTAL BALANCE IN BDT
     // ════════════════════════════════════════════════════════════
@@ -170,66 +171,29 @@ class TransactionRepositoryImpl @Inject constructor(
             Log.d(TAG, "💰 STARTING REVENUE ENTRY CREATION")
             Log.d(TAG, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
 
-            // ✅ Transaction Details
-            Log.d(TAG, "📋 TRANSACTION DETAILS:")
-            Log.d(TAG, "  Transaction ID: ${transaction.appTransactionId}")
-            Log.d(TAG, "  Type: ${transaction.type}")
-            Log.d(TAG, "  User ID: ${transaction.userId}")
-            Log.d(TAG, "  User Name: ${transaction.senderName ?: "Unknown"}")
-            Log.d(TAG, "  User Phone: ${transaction.senderPhone ?: "N/A"}")
-            Log.d(TAG, "  Amount: ${transaction.amount} ${transaction.currency}")
-            Log.d(TAG, "  Payment Method: ${transaction.paymentMethod ?: "N/A"}")
-
             val feeBDT = transaction.feeBDT
             val feeMYR = transaction.feeMYR
             val rateUsed = transaction.rateUsed.takeIf { it > 0 } ?: getCurrentExchangeRate()
 
-            Log.d(TAG, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-            Log.d(TAG, "💵 FEE DETAILS:")
-            Log.d(TAG, "  Fee BDT: ৳$feeBDT")
-            Log.d(TAG, "  Fee MYR: RM$feeMYR")
-            Log.d(TAG, "  Exchange Rate: $rateUsed")
-
-            // Convert all fees to BDT
             val totalFeeBDT = feeBDT + (feeMYR * rateUsed)
 
-            Log.d(TAG, "  Converted MYR to BDT: ৳${feeMYR * rateUsed}")
-            Log.d(TAG, "  Total Fee (BDT): ৳$totalFeeBDT")
-
-            // ✅ Skip if no fee
             if (totalFeeBDT <= 0.0) {
-                Log.d(TAG, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-                Log.d(TAG, "⚠️ SKIPPING REVENUE ENTRY")
-                Log.d(TAG, "  Reason: No fee charged (totalFeeBDT = ৳$totalFeeBDT)")
-                Log.d(TAG, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+                Log.d(TAG, "⚠️ SKIPPING REVENUE ENTRY (No fee)")
                 return
             }
 
-            // ✅✅✅ FIXED REVENUE ID - Prevents duplicates ✅✅✅
             val revenueId = "REV_${transaction.appTransactionId}"
 
-            Log.d(TAG, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-            Log.d(TAG, "🆔 REVENUE ID GENERATION:")
-            Log.d(TAG, "  Generated ID: $revenueId")
-
-            // ✅ Check if already exists (extra safety)
             val existingRevenue = firestore.collection("revenue")
                 .document(revenueId)
                 .get()
                 .await()
 
             if (existingRevenue.exists()) {
-                Log.d(TAG, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-                Log.d(TAG, "⚠️ REVENUE ENTRY ALREADY EXISTS")
-                Log.d(TAG, "  ID: $revenueId")
-                Log.d(TAG, "  Skipping duplicate entry")
-                Log.d(TAG, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+                Log.d(TAG, "⚠️ REVENUE ENTRY ALREADY EXISTS: $revenueId")
                 return
-            } else {
-                Log.d(TAG, "  ✅ Revenue ID is unique - proceeding...")
             }
 
-            // ✅ Get date parts
             val calendar = Calendar.getInstance()
             calendar.time = transaction.createdAt.toDate()
 
@@ -240,15 +204,6 @@ class TransactionRepositoryImpl @Inject constructor(
             val month = monthFormat.format(calendar.time)
             val year = calendar.get(Calendar.YEAR)
 
-            Log.d(TAG, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-            Log.d(TAG, "📅 DATE INFORMATION:")
-            Log.d(TAG, "  Day: $day")
-            Log.d(TAG, "  Month: $month")
-            Log.d(TAG, "  Year: $year")
-            Log.d(TAG, "  Created At: ${transaction.createdAt.toDate()}")
-            Log.d(TAG, "  Processed At: ${Date()}")
-
-            // ✅ Create revenue model
             val revenue = RevenueModel(
                 id = revenueId,
                 transactionId = transaction.appTransactionId,
@@ -270,67 +225,30 @@ class TransactionRepositoryImpl @Inject constructor(
                 year = year
             )
 
-            Log.d(TAG, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-            Log.d(TAG, "📦 REVENUE MODEL CREATED:")
-            Log.d(TAG, "  Revenue ID: ${revenue.id}")
-            Log.d(TAG, "  Transaction ID: ${revenue.transactionId}")
-            Log.d(TAG, "  User: ${revenue.userName} (${revenue.userPhone})")
-            Log.d(TAG, "  Type: ${revenue.type}")
-            Log.d(TAG, "  Payment Method: ${revenue.paymentMethod}")
-            Log.d(TAG, "  Fee BDT: ৳${revenue.feeBDT}")
-            Log.d(TAG, "  Fee MYR: RM${revenue.feeMYR}")
-            Log.d(TAG, "  Total Fee BDT: ৳${revenue.totalFeeBDT}")
-            Log.d(TAG, "  Rate Used: ${revenue.rateUsed}")
-            Log.d(TAG, "  Original Amount: ${revenue.amount} ${revenue.currency}")
-
-            // ✅ Save to Firestore (set will overwrite if exists)
-            Log.d(TAG, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-            Log.d(TAG, "💾 SAVING TO FIRESTORE...")
-            Log.d(TAG, "  Collection: revenue")
-            Log.d(TAG, "  Document: $revenueId")
-
             firestore.collection("revenue")
                 .document(revenueId)
                 .set(revenue)
                 .await()
 
-            Log.d(TAG, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
             Log.d(TAG, "✅✅✅ REVENUE ENTRY SAVED SUCCESSFULLY ✅✅✅")
-            Log.d(TAG, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-            Log.d(TAG, "📊 SUMMARY:")
-            Log.d(TAG, "  ✓ Revenue ID: $revenueId")
-            Log.d(TAG, "  ✓ Transaction: ${transaction.appTransactionId}")
-            Log.d(TAG, "  ✓ Type: ${transaction.type}")
-            Log.d(TAG, "  ✓ User: ${transaction.senderName}")
-            Log.d(TAG, "  ✓ Fee BDT: ৳$feeBDT")
-            Log.d(TAG, "  ✓ Fee MYR: RM$feeMYR")
-            Log.d(TAG, "  ✓ Total Revenue: ৳$totalFeeBDT")
-            Log.d(TAG, "  ✓ Date: $day")
-            Log.d(TAG, "  ✓ Month: $month")
-            Log.d(TAG, "  ✓ Year: $year")
-            Log.d(TAG, "  ✓ Saved to: revenue/$revenueId")
+            Log.d(TAG, "  Revenue ID: $revenueId")
+            Log.d(TAG, "  Total Revenue: ৳$totalFeeBDT")
             Log.d(TAG, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
 
         } catch (e: Exception) {
-            Log.e(TAG, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-            Log.e(TAG, "❌❌❌ ERROR CREATING REVENUE ENTRY ❌❌❌")
-            Log.e(TAG, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-            Log.e(TAG, "Error Message: ${e.message}")
-            Log.e(TAG, "Transaction ID: ${transaction.appTransactionId}")
-            Log.e(TAG, "Stack Trace:", e)
-            Log.e(TAG, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+            Log.e(TAG, "❌ ERROR CREATING REVENUE ENTRY: ${e.message}", e)
         }
     }
 
     // ════════════════════════════════════════════════════════════
-    // ✅✅✅ CREATE EXPENSE ENTRY (FIXED - NO DUPLICATES) ✅✅✅
+    // ✅✅✅ CREATE EXPENSE ENTRY ✅✅✅
     // ════════════════════════════════════════════════════════════
 
     private suspend fun createExpenseEntry(
         userId: String,
         userName: String,
         userPhone: String,
-        type: String,  // "first_deposit_cashback" or "referral_bonus"
+        type: String,
         amountMYR: Double,
         amountBDT: Double,
         rateUsed: Double,
@@ -339,7 +257,6 @@ class TransactionRepositoryImpl @Inject constructor(
         transactionId: String? = null
     ) {
         try {
-            // Convert all to BDT
             val totalAmountBDT = amountBDT + (amountMYR * rateUsed)
 
             if (totalAmountBDT <= 0.0) {
@@ -347,7 +264,6 @@ class TransactionRepositoryImpl @Inject constructor(
                 return
             }
 
-            // Get date parts
             val calendar = Calendar.getInstance()
             val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
             val monthFormat = SimpleDateFormat("yyyy-MM", Locale.getDefault())
@@ -356,14 +272,12 @@ class TransactionRepositoryImpl @Inject constructor(
             val month = monthFormat.format(calendar.time)
             val year = calendar.get(Calendar.YEAR)
 
-            // ✅✅✅ FIXED EXPENSE ID - Prevents duplicates ✅✅✅
             val expenseId = if (!transactionId.isNullOrBlank()) {
                 "EXP_${transactionId}"
             } else {
                 "EXP_${type.uppercase()}_${userId}_${System.currentTimeMillis()}"
             }
 
-            // ✅ Check if already exists (extra safety)
             val existingExpense = firestore.collection("expenses")
                 .document(expenseId)
                 .get()
@@ -374,14 +288,12 @@ class TransactionRepositoryImpl @Inject constructor(
                 return
             }
 
-            // Description
             val description = when (type) {
                 "first_deposit_cashback" -> "প্রথম ডিপোজিট ক্যাশব্যাক (৫%)"
                 "referral_bonus" -> "রেফারেল বোনাস - ${relatedUserName ?: "User"} ১০০০ MYR পূর্ণ করেছে"
                 else -> "Expense"
             }
 
-            // Create expense model
             val expense = ExpenseModel(
                 id = expenseId,
                 transactionId = transactionId ?: "",
@@ -402,7 +314,6 @@ class TransactionRepositoryImpl @Inject constructor(
                 year = year
             )
 
-            // Save to Firestore (set will overwrite if exists)
             firestore.collection("expenses")
                 .document(expenseId)
                 .set(expense)
@@ -453,48 +364,46 @@ class TransactionRepositoryImpl @Inject constructor(
             val referredBy = userDoc.getString("referredBy") ?: ""
             val firstDepositCashbackGiven = userDoc.getBoolean("firstDepositCashbackGiven") ?: false
 
-            // ✅ Get both deposit counters
             val totalDepositedMYR = userDoc.getDouble("totalDepositedMYR") ?: 0.0
             val totalDepositedAfterReferralMYR = userDoc.getDouble("totalDepositedAfterReferralMYR") ?: 0.0
+            val referralMilestoneAchieved = userDoc.getBoolean("referralMilestoneAchieved") ?: false
             val referralAddedAt = userDoc.getLong("referralAddedAt") ?: 0L
 
-            Log.d(TAG, "User: $userName")
-            Log.d(TAG, "Referred By: ${if (referredBy.isBlank()) "None" else referredBy}")
-            Log.d(TAG, "Total Deposited MYR (All Time): $totalDepositedMYR")
-            Log.d(TAG, "Total Deposited After Referral: $totalDepositedAfterReferralMYR")
+            Log.d(TAG, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+            Log.d(TAG, "👤 User: $userName")
+            Log.d(TAG, "📱 Phone: $userPhone")
+            Log.d(TAG, "🔗 Referred By: ${if (referredBy.isBlank()) "None" else referredBy}")
+            Log.d(TAG, "💰 Total Deposited (All Time): $totalDepositedMYR MYR")
+            Log.d(TAG, "💰 Total After Referral: $totalDepositedAfterReferralMYR MYR")
+            Log.d(TAG, "📥 Current Deposit: $depositAmountMYR MYR")
+            Log.d(TAG, "🎯 Milestone Achieved: $referralMilestoneAchieved")
 
             if (referralAddedAt > 0) {
-                val dateFormat = java.text.SimpleDateFormat(
+                val dateFormat = SimpleDateFormat(
                     "dd MMM yyyy, hh:mm a",
-                    java.util.Locale.getDefault()
+                    Locale.getDefault()
                 )
-                Log.d(TAG, "Referral Added At: ${dateFormat.format(java.util.Date(referralAddedAt))}")
+                Log.d(TAG, "📅 Referral Added At: ${dateFormat.format(Date(referralAddedAt))}")
             }
-
-            // ✅ Calculate new totals
-            val newTotalDeposited = totalDepositedMYR + depositAmountMYR
-
-            // ✅ Only count this deposit if referral code exists
-            val newTotalAfterReferral = if (referredBy.isNotBlank() && depositAmountMYR > 0) {
-                totalDepositedAfterReferralMYR + depositAmountMYR
-            } else {
-                totalDepositedAfterReferralMYR
-            }
-
-            Log.d(TAG, "New Total Deposited: $newTotalDeposited")
-            Log.d(TAG, "New Total After Referral: $newTotalAfterReferral")
 
             // ═══════════════════════════════════════════════════════
             // 1️⃣ UPDATE USER'S TOTAL DEPOSITED AMOUNTS
             // ═══════════════════════════════════════════════════════
 
             if (depositAmountMYR > 0) {
+                val newTotalDeposited = totalDepositedMYR + depositAmountMYR
+
+                val newTotalAfterReferral = if (referredBy.isNotBlank()) {
+                    totalDepositedAfterReferralMYR + depositAmountMYR
+                } else {
+                    totalDepositedAfterReferralMYR
+                }
+
                 val updates = mutableMapOf<String, Any>(
                     "totalDepositedMYR" to newTotalDeposited,
                     "firstDepositCompleted" to true
                 )
 
-                // ✅ Only update after-referral counter if referral exists
                 if (referredBy.isNotBlank()) {
                     updates["totalDepositedAfterReferralMYR"] = newTotalAfterReferral
                 }
@@ -504,36 +413,340 @@ class TransactionRepositoryImpl @Inject constructor(
                     .update(updates)
                     .await()
 
-                Log.d(TAG, "✅ Updated deposited amounts")
-            }
+                Log.d(TAG, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+                Log.d(TAG, "✅ Updated Deposit Counters:")
+                Log.d(TAG, "  Total Deposited: $totalDepositedMYR → $newTotalDeposited MYR")
+                if (referredBy.isNotBlank()) {
+                    Log.d(TAG, "  After Referral: $totalDepositedAfterReferralMYR → $newTotalAfterReferral MYR")
+                }
 
-            // ═══════════════════════════════════════════════════════
-            // 2️⃣ FIRST DEPOSIT CASHBACK (5%)
-            // ═══════════════════════════════════════════════════════
+                // ═══════════════════════════════════════════════════════
+                // 2️⃣ FIRST DEPOSIT CASHBACK (5%)
+                // ✅✅✅ WITH TRANSACTION CREATION ✅✅✅
+                // ═══════════════════════════════════════════════════════
 
-            if (!firstDepositCashbackGiven && depositAmountMYR > 0) {
-                val cashbackAmount = depositAmountMYR * FIRST_DEPOSIT_CASHBACK_PERCENT
+                if (!firstDepositCashbackGiven && depositAmountMYR > 0) {
+                    val cashbackAmount = depositAmountMYR * FIRST_DEPOSIT_CASHBACK_PERCENT
+                    val exchangeRate = getCurrentExchangeRate()
 
-                Log.d(TAG, "💰 Processing First Deposit Cashback: $cashbackAmount MYR")
+                    Log.d(TAG, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+                    Log.d(TAG, "💰 FIRST DEPOSIT CASHBACK")
+                    Log.d(TAG, "  Deposit Amount: $depositAmountMYR MYR")
+                    Log.d(TAG, "  Cashback (5%): $cashbackAmount MYR")
 
-                // ... existing cashback code ...
-            }
+                    // ✅✅✅ CREATE CASHBACK TRANSACTION ✅✅✅
+                    val cashbackTransactionId = "TXN_CASHBACK_${System.currentTimeMillis()}_${userId}"
 
-            // ═══════════════════════════════════════════════════════
-            // 3️⃣ REFERRAL REWARD (20 MYR at 1000 MYR milestone)
-            // ✅ Use totalDepositedAfterReferralMYR
-            // ═══════════════════════════════════════════════════════
+                    val cashbackTransaction = TransactionModel(
+                        appTransactionId = cashbackTransactionId,
+                        userId = userId,
+                        senderName = userName,
+                        senderPhone = userPhone,
+                        senderEmail = userEmail,
+                        type = "first_deposit_cashback",
+                        currency = "MYR",
+                        amount = cashbackAmount,
+                        netAmountMYR = cashbackAmount,
+                        convertedAmountMYR = cashbackAmount,
+                        rateUsed = exchangeRate,
+                        message = "🎉 প্রথম ডিপোজিট ক্যাশব্যাক (৫%)! ${String.format("%.2f", depositAmountMYR)} MYR ডিপোজিট করেছেন",
+                        status = "success",
+                        processed = true,
+                        createdAt = Timestamp.now(),
+                        processedAt = Timestamp.now(),
+                        feeBDT = 0.0,
+                        feeMYR = 0.0,
+                        convertedAmountBDT = 0.0,
+                        netAmountBDT = 0.0,
+                        bdtDeducted = 0.0,
+                        myrDeducted = 0.0
+                    )
 
-            if (referredBy.isNotBlank() &&
-                newTotalAfterReferral >= REFERRAL_MILESTONE_MYR &&
-                depositAmountMYR > 0) {
+                    // 📁 Save to main transactions collection
+                    firestore.collection("transactions")
+                        .document(cashbackTransactionId)
+                        .set(cashbackTransaction)
+                        .await()
 
-                // ✅ Check if milestone was just crossed
-                if (totalDepositedAfterReferralMYR < REFERRAL_MILESTONE_MYR) {
-                    Log.d(TAG, "🎯 Referral Milestone Reached!")
-                    Log.d(TAG, "Deposits After Referral: $newTotalAfterReferral MYR")
+                    Log.d(TAG, "✅ Cashback transaction created: $cashbackTransactionId")
 
-                    // ... existing referral bonus code ...
+                    // 📁 Save to user's transactions subcollection
+                    firestore.collection("users")
+                        .document(userId)
+                        .collection("transactions")
+                        .document(cashbackTransactionId)
+                        .set(cashbackTransaction)
+                        .await()
+
+                    Log.d(TAG, "✅ Saved to user's transaction history")
+
+                    // ✅ Add cashback to user balance
+                    firestore.collection("users")
+                        .document(userId)
+                        .update(
+                            mapOf(
+                                "balance.MYR" to FieldValue.increment(cashbackAmount),
+                                "firstDepositCashbackGiven" to true
+                            )
+                        )
+                        .await()
+
+                    Log.d(TAG, "✅ Added $cashbackAmount MYR to user balance")
+
+                    // ✅ Update totalBalanceBDT
+                    val userDocUpdated = firestore.collection("users")
+                        .document(userId)
+                        .get()
+                        .await()
+
+                    val balanceMap = (userDocUpdated.get("balance") as? Map<*, *>)
+                        ?.mapKeys { it.key.toString() }
+                        ?.mapValues { (it.value as? Number)?.toDouble() ?: 0.0 }
+                        ?: mapOf("BDT" to 0.0, "MYR" to 0.0)
+
+                    val newTotalBDT = calculateTotalBalanceBDT(balanceMap, exchangeRate)
+
+                    firestore.collection("users")
+                        .document(userId)
+                        .update("totalBalanceBDT", newTotalBDT)
+                        .await()
+
+                    // ✅ Create expense entry
+                    createExpenseEntry(
+                        userId = userId,
+                        userName = userName,
+                        userPhone = userPhone,
+                        type = "first_deposit_cashback",
+                        amountMYR = cashbackAmount,
+                        amountBDT = 0.0,
+                        rateUsed = exchangeRate,
+                        transactionId = cashbackTransactionId
+                    )
+
+                    // ✅ Send notification
+                    sendFirstDepositCashbackNotification(userId, cashbackAmount)
+
+                    Log.d(TAG, "✅✅✅ First Deposit Cashback Processed Successfully ✅✅✅")
+                    Log.d(TAG, "  Transaction ID: $cashbackTransactionId")
+                    Log.d(TAG, "  User: $userName")
+                    Log.d(TAG, "  Cashback: $cashbackAmount MYR")
+                    Log.d(TAG, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+                }
+
+                // ═══════════════════════════════════════════════════════
+                // 3️⃣ REFERRAL REWARD (20 MYR at 1000 MYR milestone)
+                // ✅✅✅ WITH TRANSACTION CREATION ✅✅✅
+                // ═══════════════════════════════════════════════════════
+
+                if (referredBy.isNotBlank() &&
+                    !referralMilestoneAchieved &&
+                    depositAmountMYR > 0) {
+
+                    val newTotalAfterReferral = totalDepositedAfterReferralMYR + depositAmountMYR
+
+                    Log.d(TAG, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+                    Log.d(TAG, "🎯 CHECKING REFERRAL MILESTONE")
+                    Log.d(TAG, "  Deposits After Referral: $totalDepositedAfterReferralMYR → $newTotalAfterReferral MYR")
+                    Log.d(TAG, "  Milestone Target: $REFERRAL_MILESTONE_MYR MYR")
+                    Log.d(TAG, "  Remaining: ${REFERRAL_MILESTONE_MYR - newTotalAfterReferral} MYR")
+
+                    if (newTotalAfterReferral >= REFERRAL_MILESTONE_MYR &&
+                        totalDepositedAfterReferralMYR < REFERRAL_MILESTONE_MYR) {
+
+                        Log.d(TAG, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+                        Log.d(TAG, "🎉🎉🎉 MILESTONE ACHIEVED! 🎉🎉🎉")
+                        Log.d(TAG, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+                        Log.d(TAG, "🔍 SEARCHING FOR REFERRER")
+                        Log.d(TAG, "  Referral Code: '$referredBy'")
+
+                        // ✅ Try multiple queries (case variations)
+                        var referrerDoc = firestore.collection("users")
+                            .whereEqualTo("refCode", referredBy)
+                            .get()
+                            .await()
+
+                        Log.d(TAG, "  Query 1 (exact): ${referrerDoc.size()} documents found")
+
+                        if (referrerDoc.isEmpty) {
+                            referrerDoc = firestore.collection("users")
+                                .whereEqualTo("refCode", referredBy.uppercase())
+                                .get()
+                                .await()
+                            Log.d(TAG, "  Query 2 (uppercase): ${referrerDoc.size()} documents found")
+                        }
+
+                        if (referrerDoc.isEmpty) {
+                            referrerDoc = firestore.collection("users")
+                                .whereEqualTo("refCode", referredBy.lowercase())
+                                .get()
+                                .await()
+                            Log.d(TAG, "  Query 3 (lowercase): ${referrerDoc.size()} documents found")
+                        }
+
+                        if (referrerDoc.isEmpty) {
+                            val trimmedCode = referredBy.trim()
+                            referrerDoc = firestore.collection("users")
+                                .whereEqualTo("refCode", trimmedCode)
+                                .get()
+                                .await()
+                            Log.d(TAG, "  Query 4 (trimmed): ${referrerDoc.size()} documents found")
+                        }
+
+                        if (!referrerDoc.isEmpty) {
+                            val referrerId = referrerDoc.documents[0].id
+                            val referrerData = referrerDoc.documents[0].data
+
+                            Log.d(TAG, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+                            Log.d(TAG, "✅ REFERRER FOUND!")
+                            Log.d(TAG, "  Referrer ID: $referrerId")
+                            Log.d(TAG, "  Referrer Name: ${referrerData?.get("name")}")
+                            Log.d(TAG, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+
+                            val referrerDoc2 = firestore.collection("users")
+                                .document(referrerId)
+                                .get()
+                                .await()
+
+                            if (referrerDoc2.exists()) {
+                                val referrerName = referrerDoc2.getString("name") ?: "User"
+                                val referrerPhone = referrerDoc2.getString("phone") ?: ""
+                                val referrerEmail = referrerDoc2.getString("email") ?: ""
+                                val exchangeRate = getCurrentExchangeRate()
+
+                                Log.d(TAG, "💰 Processing referral bonus...")
+                                Log.d(TAG, "  Referrer: $referrerName")
+                                Log.d(TAG, "  Reward: $REFERRAL_REWARD_MYR MYR")
+
+                                // ✅✅✅ CREATE REFERRAL BONUS TRANSACTION ✅✅✅
+                                val bonusTransactionId = "TXN_REFBONUS_${System.currentTimeMillis()}_${referrerId}"
+
+                                val bonusTransaction = TransactionModel(
+                                    appTransactionId = bonusTransactionId,
+                                    userId = referrerId,
+                                    senderName = referrerName,
+                                    senderPhone = referrerPhone,
+                                    senderEmail = referrerEmail,
+                                    type = "referral_bonus",
+                                    currency = "MYR",
+                                    amount = REFERRAL_REWARD_MYR,
+                                    netAmountMYR = REFERRAL_REWARD_MYR,
+                                    convertedAmountMYR = REFERRAL_REWARD_MYR,
+                                    rateUsed = exchangeRate,
+                                    message = "🎁 রেফারেল বোনাস! $userName ${String.format("%.2f", newTotalAfterReferral)} MYR ডিপোজিট করেছে",
+                                    status = "success",
+                                    processed = true,
+                                    createdAt = Timestamp.now(),
+                                    processedAt = Timestamp.now(),
+                                    feeBDT = 0.0,
+                                    feeMYR = 0.0,
+                                    convertedAmountBDT = 0.0,
+                                    netAmountBDT = 0.0,
+                                    bdtDeducted = 0.0,
+                                    myrDeducted = 0.0
+                                )
+
+                                // 📁 Save to main transactions collection
+                                firestore.collection("transactions")
+                                    .document(bonusTransactionId)
+                                    .set(bonusTransaction)
+                                    .await()
+
+                                Log.d(TAG, "✅ Referral bonus transaction created: $bonusTransactionId")
+
+                                // 📁 Save to user's transactions subcollection
+                                firestore.collection("users")
+                                    .document(referrerId)
+                                    .collection("transactions")
+                                    .document(bonusTransactionId)
+                                    .set(bonusTransaction)
+                                    .await()
+
+                                Log.d(TAG, "✅ Saved to referrer's transaction history")
+
+                                // ✅ Add 20 MYR to referrer balance
+                                firestore.collection("users")
+                                    .document(referrerId)
+                                    .update("balance.MYR", FieldValue.increment(REFERRAL_REWARD_MYR))
+                                    .await()
+
+                                Log.d(TAG, "✅ Added $REFERRAL_REWARD_MYR MYR to referrer balance")
+
+                                // ✅ Update referrer's totalBalanceBDT
+                                val referrerDocUpdated = firestore.collection("users")
+                                    .document(referrerId)
+                                    .get()
+                                    .await()
+
+                                val referrerBalanceMap = (referrerDocUpdated.get("balance") as? Map<*, *>)
+                                    ?.mapKeys { it.key.toString() }
+                                    ?.mapValues { (it.value as? Number)?.toDouble() ?: 0.0 }
+                                    ?: mapOf("BDT" to 0.0, "MYR" to 0.0)
+
+                                val referrerNewTotalBDT = calculateTotalBalanceBDT(referrerBalanceMap, exchangeRate)
+
+                                firestore.collection("users")
+                                    .document(referrerId)
+                                    .update(
+                                        mapOf(
+                                            "totalBalanceBDT" to referrerNewTotalBDT,
+                                            "referralEarnings" to FieldValue.increment(REFERRAL_REWARD_MYR),
+                                            "referralCount" to FieldValue.increment(1)
+                                        )
+                                    )
+                                    .await()
+
+                                // ✅ Mark milestone as achieved
+                                firestore.collection("users")
+                                    .document(userId)
+                                    .update("referralMilestoneAchieved", true)
+                                    .await()
+
+                                Log.d(TAG, "✅ Marked milestone as achieved for user")
+
+                                // ✅ Create expense entry
+                                createExpenseEntry(
+                                    userId = referrerId,
+                                    userName = referrerName,
+                                    userPhone = referrerPhone,
+                                    type = "referral_bonus",
+                                    amountMYR = REFERRAL_REWARD_MYR,
+                                    amountBDT = 0.0,
+                                    rateUsed = exchangeRate,
+                                    relatedUserId = userId,
+                                    relatedUserName = userName,
+                                    transactionId = bonusTransactionId
+                                )
+
+                                // ✅ Send notification to referrer
+                                sendReferralRewardNotification(
+                                    referrerId = referrerId,
+                                    rewardAmount = REFERRAL_REWARD_MYR,
+                                    referredUserName = userName,
+                                    totalDeposited = newTotalAfterReferral
+                                )
+
+                                Log.d(TAG, "✅✅✅ Referral Bonus Processed Successfully ✅✅✅")
+                                Log.d(TAG, "  Transaction ID: $bonusTransactionId")
+                                Log.d(TAG, "  Referrer: $referrerName")
+                                Log.d(TAG, "  Reward: $REFERRAL_REWARD_MYR MYR")
+                                Log.d(TAG, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+                            } else {
+                                Log.e(TAG, "❌ Referrer document not found: $referrerId")
+                            }
+                        } else {
+                            Log.e(TAG, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+                            Log.e(TAG, "❌ REFERRER NOT FOUND AFTER ALL ATTEMPTS")
+                            Log.e(TAG, "  Searched for refCode: '$referredBy'")
+                            Log.e(TAG, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+                        }
+                    } else {
+                        Log.d(TAG, "⏳ Milestone not yet reached")
+                        Log.d(TAG, "  Need ${REFERRAL_MILESTONE_MYR - newTotalAfterReferral} MYR more")
+                    }
+                } else if (referralMilestoneAchieved) {
+                    Log.d(TAG, "⚠️ Milestone already achieved previously")
+                } else if (referredBy.isBlank()) {
+                    Log.d(TAG, "⚠️ No referral code - skipping referral bonus check")
                 }
             }
 
@@ -747,7 +960,6 @@ class TransactionRepositoryImpl @Inject constructor(
             // ═══════════════════════════════════════════════════════
 
             if (oldStatus == "pending" && newStatus == "success") {
-                // ✅ শুধু withdraw থেকে revenue আসবে
                 if (transaction.type == "withdraw") {
                     Log.d(TAG, "💰 Creating revenue entry for approved ${transaction.type}")
 
@@ -956,7 +1168,6 @@ class TransactionRepositoryImpl @Inject constructor(
 
             }.await()
 
-            // ✅ NO REVENUE ENTRY for send_money (removed)
             Log.d(TAG, "⚠️ Skipping revenue entry for send_money (no fee)")
 
             Log.d(TAG, "✅ Send money transaction completed successfully")
