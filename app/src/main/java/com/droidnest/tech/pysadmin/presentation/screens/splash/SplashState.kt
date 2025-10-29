@@ -23,40 +23,43 @@ data class SplashState(
 class SplashViewModel @Inject constructor(
     private val authRepository: AdminAuthRepository
 ) : ViewModel() {
-    
+
     private val _state = MutableStateFlow(SplashState())
     val state: StateFlow<SplashState> = _state.asStateFlow()
-    
+
     companion object {
         private const val TAG = "SplashViewModel"
-        private const val SPLASH_DURATION = 2500L // 2.5 seconds
+        private const val SPLASH_DURATION = 2500L
     }
-    
+
     init {
         checkAuthStatus()
     }
-    
+
     private fun checkAuthStatus() {
         viewModelScope.launch {
             try {
                 Log.d(TAG, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
                 Log.d(TAG, "🔍 Checking admin authentication status...")
-                
+
                 // Show splash for minimum duration
                 delay(SPLASH_DURATION)
-                
+
+                // Check if admin is logged in (checks both Auth and Firestore)
                 val isLoggedIn = authRepository.isAdminLoggedIn()
-                
+
                 Log.d(TAG, "Admin logged in: $isLoggedIn")
                 Log.d(TAG, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-                
+
                 _state.value = _state.value.copy(
                     isLoading = false,
                     isLoggedIn = isLoggedIn
                 )
-                
+
             } catch (e: Exception) {
                 Log.e(TAG, "❌ Error checking auth status", e)
+                Log.d(TAG, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+
                 _state.value = _state.value.copy(
                     isLoading = false,
                     isLoggedIn = false,

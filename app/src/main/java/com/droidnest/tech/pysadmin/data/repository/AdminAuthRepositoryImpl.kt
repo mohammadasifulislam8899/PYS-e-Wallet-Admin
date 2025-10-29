@@ -20,7 +20,7 @@ class AdminAuthRepositoryImpl @Inject constructor(
 ) : AdminAuthRepository {
 
     companion object {
-        private const val TAG = "AdminAuthRepositoryImpl"
+        private const val TAG = "AdminAuthRepository"
     }
 
     override suspend fun createAdmin(
@@ -29,7 +29,9 @@ class AdminAuthRepositoryImpl @Inject constructor(
         phone: String,
         password: String
     ): Flow<Resource<Admin>> = flow {
+        Log.d(TAG, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
         Log.d(TAG, "📝 Repository: Create admin requested")
+        Log.d(TAG, "Name: $name, Email: $email")
 
         emit(Resource.Loading())
 
@@ -44,16 +46,19 @@ class AdminAuthRepositoryImpl @Inject constructor(
         if (result.isSuccess) {
             val admin = result.getOrNull()!!
             Log.d(TAG, "✅ Repository: Admin created successfully")
+            Log.d(TAG, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
             emit(Resource.Success(admin))
         } else {
             val error = result.exceptionOrNull()?.message ?: "Failed to create admin"
             Log.e(TAG, "❌ Repository: Admin creation failed - $error")
+            Log.d(TAG, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
             emit(Resource.Error(error))
         }
     }
 
     override suspend fun login(email: String, password: String): Flow<Resource<Admin>> = flow {
-        Log.d(TAG, "🔐 Repository: Login requested")
+        Log.d(TAG, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+        Log.d(TAG, "🔐 Repository: Login requested for: $email")
 
         emit(Resource.Loading())
 
@@ -62,10 +67,12 @@ class AdminAuthRepositoryImpl @Inject constructor(
         if (result.isSuccess) {
             val admin = result.getOrNull()!!
             Log.d(TAG, "✅ Repository: Login successful")
+            Log.d(TAG, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
             emit(Resource.Success(admin))
         } else {
             val error = result.exceptionOrNull()?.message ?: "Login failed"
             Log.e(TAG, "❌ Repository: Login failed - $error")
+            Log.d(TAG, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
             emit(Resource.Error(error))
         }
     }
@@ -85,7 +92,6 @@ class AdminAuthRepositoryImpl @Inject constructor(
         )
     }
 
-    // ✅ FIXED: Proper error handling in the flow chain
     override suspend fun getCurrentAdmin(): Flow<Resource<Admin?>> {
         Log.d(TAG, "👤 Repository: Getting current admin")
 
@@ -105,9 +111,12 @@ class AdminAuthRepositoryImpl @Inject constructor(
             }
     }
 
-    override fun isAdminLoggedIn(): Boolean {
+    override suspend fun isAdminLoggedIn(): Boolean {
+        Log.d(TAG, "🔍 Repository: Checking if admin is logged in")
+
         val isLoggedIn = dataSource.isAdminLoggedIn()
-        Log.d(TAG, "🔍 Repository: Is admin logged in - $isLoggedIn")
+
+        Log.d(TAG, "Is admin logged in: $isLoggedIn")
         return isLoggedIn
     }
 

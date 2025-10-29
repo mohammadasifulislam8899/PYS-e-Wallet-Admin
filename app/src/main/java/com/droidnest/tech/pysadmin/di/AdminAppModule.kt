@@ -109,6 +109,7 @@ object AdminAppModule {
     ): ExchangeRateRepository {
         return ExchangeRateRepositoryImpl(fireStore)
     }
+
     @Provides
     @Singleton
     fun providePaymentMethodRepository(
@@ -117,6 +118,7 @@ object AdminAppModule {
     ): AddMoneyPaymentMethodRepository {
         return AddMoneyPaymentMethodRepositoryImpl(firestore, auth)
     }
+
     @Provides
     @Singleton
     fun provideWithdrawPaymentMethodRepository(

@@ -1,3 +1,4 @@
+// admin_app/presentation/auth/login/AdminLoginScreen.kt
 @file:OptIn(ExperimentalAnimationApi::class)
 
 package com.droidnest.tech.pysadmin.presentation.screens.auth.login
@@ -36,31 +37,64 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.google.firebase.auth.FirebaseAuth
-import com.google.firebase.firestore.FirebaseFirestore
+import androidx.hilt.navigation.compose.hiltViewModel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.tasks.await
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AdminLoginScreen(
+    viewModel: AdminLoginViewModel = hiltViewModel(), // ✅ Use ViewModel
     onLoginSuccess: () -> Unit,
     onNavigateToRegister: () -> Unit = {}
 ) {
+    val state by viewModel.state.collectAsState() // ✅ Collect state
+
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var passwordVisible by remember { mutableStateOf(false) }
-    var isLoading by remember { mutableStateOf(false) }
     var emailError by remember { mutableStateOf<String?>(null) }
     var passwordError by remember { mutableStateOf<String?>(null) }
 
-    val auth = FirebaseAuth.getInstance()
-    val firestore = FirebaseFirestore.getInstance()
-    val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
     val haptic = LocalHapticFeedback.current
     val focusManager = LocalFocusManager.current
+
+    // ✅ Handle success navigation
+    LaunchedEffect(state.isSuccess) {
+        if (state.isSuccess) {
+            delay(800)
+            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+            onLoginSuccess()
+        }
+    }
+
+    // ✅ Handle errors
+    LaunchedEffect(state.error) {
+        state.error?.let { error ->
+            val message = when {
+                error.contains("password", ignoreCase = true) -> {
+                    passwordError = "Incorrect password"
+                    "🔑 Invalid password. Please try again."
+                }
+                error.contains("user", ignoreCase = true) ||
+                        error.contains("email", ignoreCase = true) -> {
+                    emailError = "Account not found"
+                    "👤 No account found with this email."
+                }
+                error.contains("network", ignoreCase = true) -> {
+                    "🌐 Network error. Check your connection."
+                }
+                else -> "❌ $error"
+            }
+
+            snackbarHostState.showSnackbar(
+                message,
+                duration = SnackbarDuration.Long
+            )
+            viewModel.clearError()
+        }
+    }
 
     // Entrance animation
     var visible by remember { mutableStateOf(false) }
@@ -175,7 +209,7 @@ fun AdminLoginScreen(
                                 placeholder = "admin@company.com",
                                 leadingIcon = Icons.Outlined.Email,
                                 errorMessage = emailError,
-                                enabled = !isLoading,
+                                enabled = !state.isLoading, // ✅ Use ViewModel state
                                 keyboardOptions = KeyboardOptions(
                                     keyboardType = KeyboardType.Email,
                                     imeAction = ImeAction.Next
@@ -210,7 +244,7 @@ fun AdminLoginScreen(
                                 else
                                     PasswordVisualTransformation(),
                                 errorMessage = passwordError,
-                                enabled = !isLoading,
+                                enabled = !state.isLoading, // ✅ Use ViewModel state
                                 keyboardOptions = KeyboardOptions(
                                     keyboardType = KeyboardType.Password,
                                     imeAction = ImeAction.Done
@@ -218,7 +252,9 @@ fun AdminLoginScreen(
                                 keyboardActions = KeyboardActions(
                                     onDone = {
                                         focusManager.clearFocus()
-                                        // Trigger login
+                                        if (email.isNotBlank() && password.isNotBlank()) {
+                                            viewModel.login(email.trim(), password)
+                                        }
                                     }
                                 )
                             )
@@ -244,10 +280,10 @@ fun AdminLoginScreen(
 
                             Spacer(modifier = Modifier.height(32.dp))
 
-                            // Login Button
+                            // ✅ Login Button - Use ViewModel
                             PremiumButton(
                                 text = "Login",
-                                isLoading = isLoading,
+                                isLoading = state.isLoading, // ✅ From ViewModel
                                 loadingText = "Authenticating...",
                                 onClick = {
                                     haptic.performHapticFeedback(HapticFeedbackType.LongPress)
@@ -259,9 +295,7 @@ fun AdminLoginScreen(
                                     if (email.isBlank()) {
                                         emailError = "Email is required"
                                         hasError = true
-                                    } else if (!android.util.Patterns.EMAIL_ADDRESS.matcher(email)
-                                            .matches()
-                                    ) {
+                                    } else if (!android.util.Patterns.EMAIL_ADDRESS.matcher(email).matches()) {
                                         emailError = "Invalid email format"
                                         hasError = true
                                     }
@@ -269,70 +303,12 @@ fun AdminLoginScreen(
                                     if (password.isBlank()) {
                                         passwordError = "Password is required"
                                         hasError = true
-                                    } else if (password.length < 6) {
-                                        passwordError = "Password must be at least 6 characters"
-                                        hasError = true
                                     }
 
                                     if (hasError) return@PremiumButton
 
-                                    isLoading = true
-
-                                    scope.launch {
-                                        try {
-                                            val authResult = auth.signInWithEmailAndPassword(
-                                                email.trim(),
-                                                password
-                                            ).await()
-
-                                            val userId = authResult.user?.uid
-                                                ?: throw Exception("Authentication failed")
-
-                                            val adminDoc = firestore.collection("admins")
-                                                .document(userId)
-                                                .get()
-                                                .await()
-
-                                            if (!adminDoc.exists()) {
-                                                auth.signOut()
-                                                emailError = "Access denied"
-                                                passwordError = "Admin privileges required"
-                                                snackbarHostState.showSnackbar(
-                                                    "⛔ Access Denied: Admin privileges required",
-                                                    duration = SnackbarDuration.Long
-                                                )
-                                                isLoading = false
-                                                return@launch
-                                            }
-
-                                            delay(800) // Success animation
-                                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                            onLoginSuccess()
-
-                                        } catch (e: Exception) {
-                                            isLoading = false
-                                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-
-                                            val message = when {
-                                                e.message?.contains("network", true) == true ->
-                                                    "🌐 Network error. Check your connection."
-                                                e.message?.contains("password", true) == true -> {
-                                                    passwordError = "Incorrect password"
-                                                    "🔑 Invalid password. Please try again."
-                                                }
-                                                e.message?.contains("user", true) == true -> {
-                                                    emailError = "Account not found"
-                                                    "👤 No account found with this email."
-                                                }
-                                                else -> "❌ Login failed. Please try again."
-                                            }
-
-                                            snackbarHostState.showSnackbar(
-                                                message,
-                                                duration = SnackbarDuration.Long
-                                            )
-                                        }
-                                    }
+                                    // ✅ Call ViewModel
+                                    viewModel.login(email.trim(), password)
                                 }
                             )
 
@@ -738,17 +714,18 @@ fun PremiumButton(
 // Premium Snackbar Component
 @Composable
 fun PremiumSnackbar(data: SnackbarData) {
-    Snackbar(
+    Surface(
         modifier = Modifier
             .padding(16.dp)
-            .clip(RoundedCornerShape(16.dp)),
-        containerColor = Color(0xFF1E1E2E),
-        contentColor = Color.White,
+            .fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
-        actionContentColor = Color(0xFF64B5F6)  // ✅ Changed from actionColor
+        color = Color(0xFF1E1E2E),
+        shadowElevation = 8.dp
     ) {
-        // ✅ Content lambda - no need for trailing lambda syntax
-        Row(verticalAlignment = Alignment.CenterVertically) {
+        Row(
+            modifier = Modifier.padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
             Icon(
                 Icons.Default.Info,
                 contentDescription = null,

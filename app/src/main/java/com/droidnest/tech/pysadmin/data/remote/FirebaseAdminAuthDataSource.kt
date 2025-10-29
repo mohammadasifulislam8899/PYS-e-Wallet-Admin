@@ -6,7 +6,6 @@ import com.droidnest.tech.pysadmin.domain.models.Admin
 import com.droidnest.tech.pysadmin.domain.models.AdminRole
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
-import com.google.firebase.firestore.ListenerRegistration
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
@@ -29,8 +28,50 @@ class FirebaseAdminAuthDataSource @Inject constructor(
     }
 
     /**
+     * Check if admin is logged in and verified in Firestore
+     */
+    suspend fun isAdminLoggedIn(): Boolean {
+        return try {
+            val userId = auth.currentUser?.uid
+
+            if (userId == null) {
+                Log.d(TAG, "❌ No user logged in")
+                return false
+            }
+
+            Log.d(TAG, "🔍 User found: $userId, checking admin document...")
+
+            // Check Firestore admin document
+            val adminDoc = adminsCollection.document(userId).get().await()
+            val exists = adminDoc.exists()
+
+            if (exists) {
+                val admin = adminDoc.toObject(Admin::class.java)
+                val isActive = admin?.isActive ?: false
+
+                if (!isActive) {
+                    Log.w(TAG, "⚠️ Admin account is deactivated")
+                    auth.signOut()
+                    return false
+                }
+
+                Log.d(TAG, "✅ Admin verified: ${admin?.name}")
+                true
+            } else {
+                Log.e(TAG, "❌ Admin document not found! Logging out...")
+                auth.signOut()
+                false
+            }
+
+        } catch (e: Exception) {
+            Log.e(TAG, "❌ Error checking admin status", e)
+            auth.signOut()
+            false
+        }
+    }
+
+    /**
      * Get current admin with real-time updates
-     * ✅ COMPLETELY REWRITTEN FOR STABILITY
      */
     fun getCurrentAdmin(): Flow<Admin?> = callbackFlow {
         Log.d(TAG, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
@@ -79,14 +120,18 @@ class FirebaseAdminAuthDataSource @Inject constructor(
      */
     suspend fun login(email: String, password: String): Result<Admin> {
         return try {
+            Log.d(TAG, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
             Log.d(TAG, "🔐 Login attempt: $email")
 
             val authResult = auth.signInWithEmailAndPassword(email, password).await()
             val userId = authResult.user?.uid ?: throw Exception("No user ID")
 
+            Log.d(TAG, "✅ Auth login successful: $userId")
+
             val adminDoc = adminsCollection.document(userId).get().await()
 
             if (!adminDoc.exists()) {
+                Log.e(TAG, "❌ Admin document not found!")
                 auth.signOut()
                 throw Exception("Access denied. You are not an admin.")
             }
@@ -95,6 +140,7 @@ class FirebaseAdminAuthDataSource @Inject constructor(
                 ?: throw Exception("Failed to parse admin data")
 
             if (!admin.isActive) {
+                Log.w(TAG, "⚠️ Admin account is deactivated")
                 auth.signOut()
                 throw Exception("Your admin account has been deactivated.")
             }
@@ -112,13 +158,18 @@ class FirebaseAdminAuthDataSource @Inject constructor(
             ).await()
 
             Log.d(TAG, "✅ Login successful: ${admin.name}")
+            Log.d(TAG, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+
             Result.success(admin)
 
         } catch (e: Exception) {
-            Log.e(TAG, "❌ Login failed", e)
+            Log.e(TAG, "❌ Login failed: ${e.message}", e)
+            Log.d(TAG, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+
             val errorMessage = when {
-                e.message?.contains("password") == true -> "Invalid credentials"
-                e.message?.contains("network") == true -> "Network error"
+                e.message?.contains("password", ignoreCase = true) == true -> "Invalid credentials"
+                e.message?.contains("network", ignoreCase = true) == true -> "Network error"
+                e.message?.contains("user", ignoreCase = true) == true -> "No account found with this email"
                 else -> e.message ?: "Login failed"
             }
             Result.failure(Exception(errorMessage))
@@ -130,6 +181,7 @@ class FirebaseAdminAuthDataSource @Inject constructor(
      */
     suspend fun logout(): Result<Unit> {
         return try {
+            Log.d(TAG, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
             Log.d(TAG, "🚪 Logging out")
 
             val userId = auth.currentUser?.uid
@@ -142,6 +194,7 @@ class FirebaseAdminAuthDataSource @Inject constructor(
                     adminsCollection.document(userId).update(
                         "lastActive", timestamp
                     ).await()
+                    Log.d(TAG, "✅ Last active timestamp updated")
                 } catch (e: Exception) {
                     Log.w(TAG, "⚠️ Could not update last active", e)
                 }
@@ -149,19 +202,14 @@ class FirebaseAdminAuthDataSource @Inject constructor(
 
             auth.signOut()
             Log.d(TAG, "✅ Logout successful")
+            Log.d(TAG, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
             Result.success(Unit)
 
         } catch (e: Exception) {
             Log.e(TAG, "❌ Logout failed", e)
+            Log.d(TAG, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
             Result.failure(e)
         }
-    }
-
-    /**
-     * Check if admin is logged in
-     */
-    fun isAdminLoggedIn(): Boolean {
-        return auth.currentUser != null
     }
 
     /**
@@ -185,32 +233,43 @@ class FirebaseAdminAuthDataSource @Inject constructor(
      */
     suspend fun resetPassword(email: String): Result<Unit> {
         return try {
+            Log.d(TAG, "📧 Sending password reset email to: $email")
             auth.sendPasswordResetEmail(email).await()
+            Log.d(TAG, "✅ Reset email sent")
             Result.success(Unit)
         } catch (e: Exception) {
+            Log.e(TAG, "❌ Failed to send reset email", e)
             Result.failure(e)
         }
     }
 
     /**
-     * Create admin
+     * Create admin (Signup)
      */
     suspend fun createAdmin(
         email: String,
         password: String,
         name: String,
         phone: String,
-        role: AdminRole = AdminRole.ADMIN
+        role: AdminRole = AdminRole.SUPER_ADMIN
     ): Result<Admin> {
         return try {
-            Log.d(TAG, "📝 Creating admin: $email")
+            Log.d(TAG, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+            Log.d(TAG, "📝 Creating admin account")
+            Log.d(TAG, "Email: $email")
+            Log.d(TAG, "Name: $name")
+            Log.d(TAG, "Phone: $phone")
 
+            // 1. Create Firebase Auth account
             val authResult = auth.createUserWithEmailAndPassword(email, password).await()
             val userId = authResult.user?.uid ?: throw Exception("Failed to create user")
+
+            Log.d(TAG, "✅ Auth account created: $userId")
 
             val timestamp = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault())
                 .format(Date())
 
+            // 2. Create Admin object
             val admin = Admin(
                 adminId = userId,
                 name = name,
@@ -234,25 +293,41 @@ class FirebaseAdminAuthDataSource @Inject constructor(
                 lastActive = timestamp,
                 isActive = true,
                 loginAttempts = 0,
-                lastLoginAt = ""
+                lastLoginAt = timestamp
             )
 
+            // 3. Save to Firestore
             adminsCollection.document(userId).set(admin).await()
-            auth.signOut()
 
-            Log.d(TAG, "✅ Admin created successfully")
+            Log.d(TAG, "✅ Admin document created in Firestore")
+            Log.d(TAG, "📄 Admin data: $admin")
+            Log.d(TAG, "✅ Admin creation successful! User is now logged in.")
+            Log.d(TAG, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+
+            // DON'T LOGOUT - Keep user signed in!
             Result.success(admin)
 
         } catch (e: Exception) {
-            Log.e(TAG, "❌ Failed to create admin", e)
+            Log.e(TAG, "❌ Failed to create admin: ${e.message}", e)
+            Log.d(TAG, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
 
+            // Cleanup on failure
             try {
                 auth.currentUser?.delete()?.await()
+                Log.d(TAG, "🧹 Cleaned up failed auth account")
             } catch (deleteError: Exception) {
-                Log.e(TAG, "Cleanup failed", deleteError)
+                Log.e(TAG, "⚠️ Cleanup failed", deleteError)
             }
 
-            Result.failure(e)
+            val errorMessage = when {
+                e.message?.contains("email", ignoreCase = true) == true -> "Invalid email format"
+                e.message?.contains("password", ignoreCase = true) == true -> "Password too weak (min 6 characters)"
+                e.message?.contains("already", ignoreCase = true) == true -> "Email already in use"
+                e.message?.contains("network", ignoreCase = true) == true -> "Network error"
+                else -> e.message ?: "Failed to create admin"
+            }
+
+            Result.failure(Exception(errorMessage))
         }
     }
 }
