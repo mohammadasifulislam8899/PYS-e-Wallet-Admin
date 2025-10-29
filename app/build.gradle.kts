@@ -3,7 +3,7 @@ plugins {
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
     kotlin("plugin.serialization") version "2.1.0"  // ✅ Match Kotlin version
-    id("com.google.devtools.ksp") version "2.1.0-1.0.29"  // ✅ MUST be before Hilt
+    id("com.google.devtools.ksp") version "2.2.0-2.0.2"  // ✅ MUST be before Hilt
     id("com.google.dagger.hilt.android")
     alias(libs.plugins.google.gms.google.services)
 }
